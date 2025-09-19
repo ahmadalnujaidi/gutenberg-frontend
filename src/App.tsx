@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { 
   CssBaseline, 
@@ -10,7 +10,9 @@ import {
   Step,
   StepLabel,
   Fade,
-  Alert
+  Alert,
+  useMediaQuery,
+  useTheme
 } from '@mui/material';
 import { NetworkVisualization } from './components/NetworkVisualization';
 import { CharacterPanel } from './components/CharacterPanel';
@@ -70,7 +72,12 @@ const App: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [selectedBook, setSelectedBook] = useState<{ id: number, title: string } | null>(null);
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
+  const [containerDimensions, setContainerDimensions] = useState({ width: 900, height: 700 });
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  const muiTheme = useTheme();
+  const isMobile = useMediaQuery(muiTheme.breakpoints.down('md')); // Mobile/tablet detection
+  const isSmallMobile = useMediaQuery(muiTheme.breakpoints.down('sm')); // Small mobile
   
   const { 
     isConnected, 
@@ -87,6 +94,48 @@ const App: React.FC = () => {
     highlightCharacter, 
     getCharacterInteractions 
   } = useNetworkData();
+
+  // Update container dimensions on resize with mobile optimization
+  useEffect(() => {
+    const updateDimensions = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const padding = 32; // Account for padding
+        
+        let width = rect.width - padding;
+        let height = rect.height - padding;
+        
+        // Mobile-specific adjustments
+        if (isMobile) {
+          // On mobile, use viewport dimensions for better experience
+          width = Math.min(window.innerWidth - 40, width); // 40px total horizontal margin
+          height = Math.min(window.innerHeight * 0.6, height); // Use 60% of viewport height
+          
+          // Minimum dimensions for mobile
+          width = Math.max(300, width);
+          height = Math.max(400, height);
+        }
+        
+        setContainerDimensions({ width, height });
+      }
+    };
+
+    updateDimensions();
+    window.addEventListener('resize', updateDimensions);
+    window.addEventListener('orientationchange', updateDimensions);
+    
+    // Also update when container changes
+    const resizeObserver = new ResizeObserver(updateDimensions);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateDimensions);
+      window.removeEventListener('orientationchange', updateDimensions);
+      resizeObserver.disconnect();
+    };
+  }, [isMobile]);
 
   const handleBookSelect = async (bookId: number, bookTitle: string) => {
     try {
@@ -155,13 +204,13 @@ const App: React.FC = () => {
           justifyContent: 'center',
           height: '100%',
           textAlign: 'center',
-          p: 4,
+          p: isMobile ? 2 : 4,
         }}
       >
-        <Typography variant="h5" gutterBottom sx={{ opacity: 0.7 }}>
+        <Typography variant={isMobile ? "h6" : "h5"} gutterBottom sx={{ opacity: 0.7 }}>
           {!selectedBook ? '📚 Choose a book to begin' : '🔍 Analysis in progress...'}
         </Typography>
-        <Typography variant="body1" sx={{ opacity: 0.5, maxWidth: 400 }}>
+        <Typography variant="body2" sx={{ opacity: 0.5, maxWidth: isMobile ? 300 : 400 }}>
           {!selectedBook 
             ? 'Select a book from Project Gutenberg above to start analyzing character relationships and interactions.'
             : 'Please wait while we process the book and extract character networks. This may take a few minutes.'}
@@ -173,31 +222,33 @@ const App: React.FC = () => {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Container maxWidth={false} sx={{ py: 3, px: 2 }}>
+      <Container maxWidth={false} sx={{ py: isMobile ? 2 : 3, px: isMobile ? 1 : 2 }}>
         {/* Header with improved spacing */}
-        <Box sx={{ textAlign: 'center', mb: 4 }}>
+        <Box sx={{ textAlign: 'center', mb: isMobile ? 2 : 4 }}>
           <Typography 
-            variant="h4" 
+            variant={isMobile ? "h5" : "h4"} 
             component="h1" 
             gutterBottom
             sx={{ mb: 2 }}
           >
             📚 Literary Character Network Analysis
           </Typography>
-          <Typography variant="subtitle1" color="text.secondary" sx={{ mb: 3 }}>
+          <Typography variant={isMobile ? "body2" : "subtitle1"} color="text.secondary" sx={{ mb: 3 }}>
             Discover character relationships in classic literature using AI-powered analysis
           </Typography>
           
-          {/* Progress Stepper */}
-          <Box sx={{ maxWidth: 600, mx: 'auto', mb: 4 }}>
-            <Stepper activeStep={getCurrentStep()} alternativeLabel>
-              {steps.map((label) => (
-                <Step key={label}>
-                  <StepLabel>{label}</StepLabel>
-                </Step>
-              ))}
-            </Stepper>
-          </Box>
+          {/* Progress Stepper - Hide on small mobile to save space */}
+          {!isSmallMobile && (
+            <Box sx={{ maxWidth: 600, mx: 'auto', mb: 4 }}>
+              <Stepper activeStep={getCurrentStep()} alternativeLabel>
+                {steps.map((label) => (
+                  <Step key={label}>
+                    <StepLabel>{label}</StepLabel>
+                  </Step>
+                ))}
+              </Stepper>
+            </Box>
+          )}
         </Box>
 
         {/* Book Selector with improved messaging */}
@@ -225,18 +276,24 @@ const App: React.FC = () => {
           </Box>
         </Fade>
 
-        {/* Results Section */}
+        {/* Results Section - Responsive Layout */}
         <Fade in timeout={1000}>
           <Box sx={{ mt: 3 }}>
-            <Box sx={{ display: 'flex', gap: 3 }}>
+            <Box sx={{ 
+              display: 'flex', 
+              flexDirection: isMobile ? 'column' : 'row', // Stack vertically on mobile
+              gap: 3 
+            }}>
               {/* Network Visualization */}
               <Paper 
                 ref={containerRef}
                 elevation={3} 
                 sx={{ 
-                  flex: 1, 
-                  p: 2, 
-                  minHeight: '700px',
+                  flex: 1,
+                  order: isMobile ? 2 : 1, // Show after character panel on mobile
+                  p: isMobile ? 1 : 2, 
+                  minHeight: isMobile ? '400px' : '700px', // Smaller on mobile
+                  height: isMobile ? '60vh' : '700px', // Use viewport height on mobile
                   background: '#000000',
                   position: 'relative',
                   overflow: 'hidden',
@@ -252,17 +309,22 @@ const App: React.FC = () => {
                     links={links}
                     highlightedCharacter={highlightedCharacter}
                     onCharacterClick={highlightCharacter}
-                    width={900}
-                    height={700}
+                    width={containerDimensions.width}
+                    height={containerDimensions.height}
                   />
                 ) : (
                   <EmptyStateMessage />
                 )}
               </Paper>
 
-              {/* Character Panel */}
+              {/* Character Panel - Responsive width */}
               <Fade in={nodes.length > 0} timeout={1200}>
-                <Box sx={{ width: 400 }}>
+                <Box sx={{ 
+                  width: isMobile ? '100%' : 400,
+                  order: isMobile ? 1 : 2, // Show before graph on mobile
+                  maxHeight: isMobile ? '300px' : 'none', // Limit height on mobile
+                  overflow: isMobile ? 'auto' : 'visible'
+                }}>
                   <CharacterPanel
                     characters={getCharacterInteractions()}
                     onCharacterClick={highlightCharacter}
@@ -285,8 +347,8 @@ const App: React.FC = () => {
               }}
             >
               <Typography variant="body2">
-                <strong>💡 How to explore:</strong> Click on characters in the network to highlight their connections, 
-                or use the character panel on the right to see detailed interaction statistics. 
+                <strong>💡 How to explore:</strong> {isMobile ? 'Tap' : 'Click'} on characters in the network to highlight their connections, 
+                or use the character panel {isMobile ? 'above' : 'on the right'} to see detailed interaction statistics. 
                 The network automatically adjusts to show all characters optimally.
               </Typography>
             </Alert>

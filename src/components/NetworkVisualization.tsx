@@ -98,6 +98,9 @@ export const NetworkVisualization: React.FC<NetworkVisualizationProps> = ({
 
   useEffect(() => {
     if (!svgRef.current || nodes.length === 0) return;
+    
+    // Detect if we're on mobile
+    const isMobile = width < 768;
 
     const svg = d3.select(svgRef.current);
     const isFirstRender = previousNodesRef.current.length === 0;
@@ -179,22 +182,22 @@ export const NetworkVisualization: React.FC<NetworkVisualizationProps> = ({
         .attr("stop-color", d3.color(baseColor)!.darker(0.5).toString());
     });
 
-    // Enhanced simulation with better forces
+    // Enhanced simulation with mobile-friendly forces
     const simulation = d3.forceSimulation<NetworkNode>(nodes)
-      .force("link", d3.forceLink<NetworkNode, NetworkLink>(links)
-        .id(d => d.id)
-        .distance(d => Math.max(100, 180 - d.weight * 6))
-        .strength(d => Math.min(0.9, d.weight / 15)))
-      .force("charge", d3.forceManyBody<NetworkNode>()
-        .strength(() => -1000)
-        .distanceMin(40)
-        .distanceMax(400))
-      .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide<NetworkNode>()
-        .radius(d => Math.max(d.radius + 40, (d.name.length * 4) + 30))
-        .strength(0.8))
-      .force("x", d3.forceX(width / 2).strength(0.03))
-      .force("y", d3.forceY(height / 2).strength(0.03));
+    .force("link", d3.forceLink<NetworkNode, NetworkLink>(links)
+      .id(d => d.id)
+      .distance(d => Math.max(isMobile ? 60 : 100, (isMobile ? 120 : 180) - d.weight * 6))
+      .strength(d => Math.min(0.9, d.weight / 15)))
+    .force("charge", d3.forceManyBody<NetworkNode>()
+      .strength(() => isMobile ? -400 : -1000) // Less repulsion on mobile
+      .distanceMin(isMobile ? 20 : 40)
+      .distanceMax(isMobile ? 200 : 400))
+    .force("center", d3.forceCenter(width / 2, height / 2))
+    .force("collision", d3.forceCollide<NetworkNode>()
+      .radius(d => Math.max(d.radius + (isMobile ? 15 : 40), (d.name.length * (isMobile ? 2 : 4)) + (isMobile ? 15 : 30)))
+      .strength(0.8))
+    .force("x", d3.forceX(width / 2).strength(0.03))
+    .force("y", d3.forceY(height / 2).strength(0.03));
 
     simulationRef.current = simulation;
 
@@ -349,6 +352,26 @@ export const NetworkVisualization: React.FC<NetworkVisualizationProps> = ({
       })
       .on("mouseout", function(_, d) {
         const node = d3.select(this);
+
+          // Update text with mobile-friendly sizing
+        nodeUpdate.select<SVGTextElement>(".node-text")
+        .transition()
+        .duration(600)
+        .attr("font-size", d => {
+          // Mobile-friendly font sizing
+          const baseSize = isMobile 
+            ? Math.max(6, Math.min(10, d.radius / 5))
+            : Math.max(9, Math.min(16, d.radius / 4));
+          const lengthAdjustment = Math.max(0.7, 1 - (d.name.length / (isMobile ? 20 : 30)));
+          return Math.max(isMobile ? 6 : 8, baseSize * lengthAdjustment);
+        })
+        .text(d => {
+          // On mobile, truncate very long names
+          if (isMobile && d.name.length > 15) {
+            return d.name.substring(0, 12) + "...";
+          }
+          return d.name;
+        });
         
         node.select<SVGCircleElement>(".main-circle")
           .transition()
@@ -500,7 +523,8 @@ export const NetworkVisualization: React.FC<NetworkVisualizationProps> = ({
         overflow: 'visible',
         border: '1px solid #333',
         maxWidth: '100%',
-        maxHeight: '100%'
+        maxHeight: '100%',
+        touchAction: 'pan-x pan-y' // Enable touch gestures on mobile
       }}
     />
   );
