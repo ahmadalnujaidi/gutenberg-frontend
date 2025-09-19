@@ -13,6 +13,9 @@ import {
 } from '@mui/material';
 import { Search, Book, Send, CheckCircle, Refresh } from '@mui/icons-material';
 
+// Import the local books data
+import booksData from '../assets/books_id_title.json';
+
 interface GutenbergBook {
   id: number;
   title: string;
@@ -34,74 +37,48 @@ export const BookSelector: React.FC<BookSelectorProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [searchValue, setSearchValue] = useState('');
   const [selectedOption, setSelectedOption] = useState<GutenbergBook | null>(selectedBook);
-  const [loadingProgress, setLoadingProgress] = useState(0);
 
-  // Fetch all Gutenberg books with progress tracking
-  const fetchAllBooks = async () => {
+  // Load books from local JSON file
+  const loadBooksFromLocal = () => {
     setLoading(true);
     setError(null);
-    setLoadingProgress(0);
     
     try {
-      let url = 'http://gutendex.com/books';
-      const allBooks: GutenbergBook[] = [];
-      let pageCount = 0;
-      const maxPages = 50;
-      
-      while (url && pageCount < maxPages) {
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch books: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        const pageBooks = data.results.map((book: any) => ({
-          id: book.id,
-          title: book.title
-        }));
-        
-        allBooks.push(...pageBooks);
-        pageCount++;
-        
-        // Update progress
-        const progress = (pageCount / maxPages) * 100;
-        setLoadingProgress(progress);
-        
-        // Update UI with progress
-        setBooks([...allBooks]);
-        url = data.next;
-        
-        // Small delay to show progress
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
-      
-      console.log(`✅ Loaded ${allBooks.length} books from Project Gutenberg`);
+      // Simulate a small delay to show loading state
+      setTimeout(() => {
+        setBooks(booksData as GutenbergBook[]);
+        setLoading(false);
+        console.log(`✅ Loaded ${booksData}`);
+      }, 300);
       
     } catch (err) {
-      console.error('Failed to fetch books:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch books');
-    } finally {
+      console.error('Failed to load books:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load books');
       setLoading(false);
-      setLoadingProgress(100);
     }
   };
 
   // Load books on component mount
   useEffect(() => {
-    fetchAllBooks();
+    loadBooksFromLocal();
   }, []);
 
-  // Filter books based on search input
+  // Filter books based on search input with improved performance
   const filteredBooks = useMemo(() => {
-    if (!searchValue.trim()) return books.slice(0, 100);
+    if (!searchValue.trim()) return books.slice(0, 100); // Show first 100 books by default
     
     const searchLower = searchValue.toLowerCase();
+    const searchTerms = searchLower.split(' ').filter(term => term.length > 0);
+    
     return books
-      .filter(book => 
-        book.title.toLowerCase().includes(searchLower) ||
-        book.id.toString().includes(searchValue)
-      )
-      .slice(0, 50);
+      .filter(book => {
+        const titleLower = book.title.toLowerCase();
+        const idMatch = book.id.toString().includes(searchValue);
+        
+        // Match if ID matches or all search terms are found in title
+        return idMatch || searchTerms.every(term => titleLower.includes(term));
+      })
+      .slice(0, 50); // Limit results for performance
   }, [books, searchValue]);
 
   const handleBookSelection = (book: GutenbergBook | null) => {
@@ -149,12 +126,11 @@ export const BookSelector: React.FC<BookSelectorProps> = ({
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
             <CircularProgress size={20} />
             <Typography variant="body2">
-              Loading books from Project Gutenberg...
+              Loading books from local database...
             </Typography>
           </Box>
           <LinearProgress 
-            variant="determinate" 
-            value={loadingProgress} 
+            variant="indeterminate" 
             sx={{ borderRadius: 2 }}
           />
         </Box>
@@ -166,7 +142,7 @@ export const BookSelector: React.FC<BookSelectorProps> = ({
             <span>{error}</span>
             <Button 
               startIcon={<Refresh />}
-              onClick={fetchAllBooks} 
+              onClick={loadBooksFromLocal} 
               size="small"
               color="error"
             >
@@ -227,18 +203,12 @@ export const BookSelector: React.FC<BookSelectorProps> = ({
               </Box>
             )}
             noOptionsText={
-                loading ? "Loading books..." : 
-                searchValue ? "No books found matching your search" : 
-                "Start typing to search through thousands of books..."
-              }
-              filterOptions={(x) => x}
-              slotProps={{
-                popper: {
-                  style: { zIndex: 1300 }
-                }
-              }}
-            />
-            
+              loading ? "Loading books..." : 
+              searchValue ? "No books found matching your search" : 
+              "Start typing to search through thousands of books..."
+            }
+            filterOptions={(x) => x} // We handle filtering manually for better performance
+          />
           
           <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
             {loading ? 'Loading...' : `${books.length.toLocaleString()} books available`}
