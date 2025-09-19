@@ -1,6 +1,5 @@
 import { useState, useCallback } from 'react';
 import type { AnalysisResult, NetworkNode, NetworkLink } from '../types';
-import * as d3 from 'd3';
 
 export const useNetworkData = () => {
   const [nodes, setNodes] = useState<NetworkNode[]>([]);

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { 
   CssBaseline, 
@@ -18,7 +18,6 @@ import { ControlPanel } from './components/ControlPanel';
 import { BookSelector } from './components/BookSelector';
 import { useSocket } from './hooks/useSocket';
 import { useNetworkData } from './hooks/useNetworkData';
-
 
 const theme = createTheme({
   palette: {
@@ -71,7 +70,6 @@ const App: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [selectedBook, setSelectedBook] = useState<{ id: number, title: string } | null>(null);
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
-  const [containerDimensions, setContainerDimensions] = useState({ width: 900, height: 700 });
   const containerRef = useRef<HTMLDivElement>(null);
   
   const { 
@@ -99,10 +97,7 @@ const App: React.FC = () => {
 
       const bookIdString = bookId.toString();
 
-      const analyzeapi = import.meta.env.VITE_API_BASE_URL;
-      console.log(analyzeapi);
-
-      const response = await fetch(analyzeapi, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -149,33 +144,6 @@ const App: React.FC = () => {
       setIsAnalyzing(false);
     }
   }, [currentUpdate, updateData]);
-
-  // Update container dimensions on resize
-  useEffect(() => {
-    const updateDimensions = () => {
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        setContainerDimensions({
-          width: rect.width - 32, // Account for padding (16px * 2)
-          height: rect.height - 32
-        });
-      }
-    };
-
-    updateDimensions();
-    window.addEventListener('resize', updateDimensions);
-    
-    // Also update when container changes
-    const resizeObserver = new ResizeObserver(updateDimensions);
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
-    }
-
-    return () => {
-      window.removeEventListener('resize', updateDimensions);
-      resizeObserver.disconnect();
-    };
-  }, []);
 
   const EmptyStateMessage = () => (
     <Fade in={!selectedBook || nodes.length === 0}>
@@ -263,15 +231,19 @@ const App: React.FC = () => {
             <Box sx={{ display: 'flex', gap: 3 }}>
               {/* Network Visualization */}
               <Paper 
+                ref={containerRef}
                 elevation={3} 
                 sx={{ 
                   flex: 1, 
                   p: 2, 
                   minHeight: '700px',
-                  background: '#000000', // Black background
+                  background: '#000000',
                   position: 'relative',
                   overflow: 'hidden',
                   border: '2px solid #333',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
                 }}
               >
                 {nodes.length > 0 ? (

@@ -45,7 +45,7 @@ export const NetworkVisualization: React.FC<NetworkVisualizationProps> = ({
   }, []);
 
   // Smooth auto-fit function with improved calculations
-  const autoFitGraph = useCallback((svg: d3.Selection<SVGSVGElement, unknown, null, undefined>, g: d3.Selection<SVGGElement, unknown, null, undefined>, immediate: boolean = false) => {
+  const autoFitGraph = useCallback((svg: d3.Selection<SVGSVGElement, unknown, null, undefined>, immediate: boolean = false) => {
     if (nodes.length === 0) return;
 
     const delay = immediate ? 100 : 1000;
@@ -109,7 +109,7 @@ export const NetworkVisualization: React.FC<NetworkVisualizationProps> = ({
     }
 
     // Create or select main group for zoom/pan
-    let g = svg.select('g.main-group');
+    let g = svg.select<SVGGElement>('g.main-group');
     if (g.empty()) {
       g = svg.append("g").attr("class", "main-group");
     }
@@ -126,13 +126,13 @@ export const NetworkVisualization: React.FC<NetworkVisualizationProps> = ({
     }
 
     // Create or update defs for gradients and filters
-    let defs = svg.select('defs');
+    let defs = svg.select<SVGDefsElement>('defs');
     if (defs.empty()) {
       defs = svg.append("defs");
     }
 
     // Enhanced glow filter
-    let glowFilter = defs.select('#glow');
+    let glowFilter = defs.select<SVGFilterElement>('#glow');
     if (glowFilter.empty()) {
       glowFilter = defs.append("filter")
         .attr("id", "glow")
@@ -153,7 +153,7 @@ export const NetworkVisualization: React.FC<NetworkVisualizationProps> = ({
     // Create unique gradients for each character
     nodes.forEach((node, index) => {
       const gradientId = `gradient-${node.id}`;
-      let gradient = defs.select(`#${gradientId}`);
+      let gradient = defs.select<SVGRadialGradientElement>(`#${gradientId}`);
       
       if (gradient.empty()) {
         gradient = defs.append("radialGradient")
@@ -186,7 +186,7 @@ export const NetworkVisualization: React.FC<NetworkVisualizationProps> = ({
         .distance(d => Math.max(100, 180 - d.weight * 6))
         .strength(d => Math.min(0.9, d.weight / 15)))
       .force("charge", d3.forceManyBody<NetworkNode>()
-        .strength(d => -1000 - (d.mentions * 40))
+        .strength(() => -1000)
         .distanceMin(40)
         .distanceMax(400))
       .force("center", d3.forceCenter(width / 2, height / 2))
@@ -199,8 +199,8 @@ export const NetworkVisualization: React.FC<NetworkVisualizationProps> = ({
     simulationRef.current = simulation;
 
     // Enhanced links with better styling
-    const linkSelection = g.selectAll("line.link")
-      .data(links, (d: any) => `${d.source.id || d.source}-${d.target.id || d.target}`);
+    const linkSelection = g.selectAll<SVGLineElement, NetworkLink>("line.link")
+      .data(links, (d: NetworkLink) => `${(d.source as NetworkNode).id || d.source}-${(d.target as NetworkNode).id || d.target}`);
 
     // Remove old links
     linkSelection.exit()
@@ -216,7 +216,7 @@ export const NetworkVisualization: React.FC<NetworkVisualizationProps> = ({
       .attr("stroke-opacity", 0);
 
     // Update all links
-    const linkUpdate = linkEnter.merge(linkSelection as any)
+    linkEnter.merge(linkSelection)
       .transition()
       .duration(800)
       .attr("stroke", d => {
@@ -229,8 +229,8 @@ export const NetworkVisualization: React.FC<NetworkVisualizationProps> = ({
       .style("filter", "url(#glow)");
 
     // Enhanced nodes with smooth updates
-    const nodeSelection = g.selectAll("g.node")
-      .data(nodes, (d: any) => d.id);
+    const nodeSelection = g.selectAll<SVGGElement, NetworkNode>("g.node")
+      .data(nodes, (d: NetworkNode) => d.id);
 
     // Remove old nodes
     nodeSelection.exit()
@@ -251,7 +251,7 @@ export const NetworkVisualization: React.FC<NetworkVisualizationProps> = ({
     // Add glow circle for each new node
     nodeEnter.append("circle")
       .attr("class", "glow-circle")
-      .attr("fill", (d, i) => generateUniqueColors(i))
+      .attr("fill", (_, i) => generateUniqueColors(i))
       .attr("opacity", 0.2)
       .style("filter", "blur(3px)");
 
@@ -277,32 +277,32 @@ export const NetworkVisualization: React.FC<NetworkVisualizationProps> = ({
     nodeEnter.append("title");
 
     // Update all nodes (new + existing)
-    const nodeUpdate = nodeEnter.merge(nodeSelection as any);
+    const nodeUpdate = nodeEnter.merge(nodeSelection);
 
     // Animate new nodes in
     nodeEnter
       .transition()
       .duration(800)
-      .delay((d, i) => i * 50) // Stagger animation
+      .delay((_, i) => i * 50) // Stagger animation
       .attr("transform", "scale(1)")
       .style("opacity", 1);
 
     // Update glow circles
-    nodeUpdate.select(".glow-circle")
+    nodeUpdate.select<SVGCircleElement>(".glow-circle")
       .transition()
       .duration(600)
       .attr("r", d => d.radius + 6)
-      .attr("fill", (d, i) => generateUniqueColors(i));
+      .attr("fill", (_, i) => generateUniqueColors(i));
 
     // Update main circles
-    nodeUpdate.select(".main-circle")
+    nodeUpdate.select<SVGCircleElement>(".main-circle")
       .transition()
       .duration(600)
       .attr("r", d => d.radius)
-      .attr("fill", (d, i) => `url(#gradient-${d.id})`);
+      .attr("fill", d => `url(#gradient-${d.id})`);
 
     // Update text - ALWAYS show full character name
-    nodeUpdate.select(".node-text")
+    nodeUpdate.select<SVGTextElement>(".node-text")
       .transition()
       .duration(600)
       .attr("font-size", d => {
@@ -314,63 +314,62 @@ export const NetworkVisualization: React.FC<NetworkVisualizationProps> = ({
       .text(d => d.name); // Always show complete name
 
     // Update tooltips
-    nodeUpdate.select("title")
+    nodeUpdate.select<SVGTitleElement>("title")
       .text(d => `${d.name}\n📊 Mentions: ${d.mentions}\n⭐ Importance: ${d.importance}/5`);
 
     // Enhanced interactions
     nodeUpdate
-      .on("click", (event, d) => {
-        event.stopPropagation();
+      .on("click", (_, d) => {
         onCharacterClick(d.name);
       })
-      .on("mouseover", function(event, d) {
+      .on("mouseover", function(_, d) {
         const node = d3.select(this);
         
-        node.select(".main-circle")
+        node.select<SVGCircleElement>(".main-circle")
           .transition()
           .duration(200)
           .attr("r", d.radius * 1.2)
           .attr("stroke-width", 4)
           .style("filter", "drop-shadow(0px 6px 20px rgba(255,255,255,0.3)) url(#glow)");
         
-        node.select(".glow-circle")
+        node.select<SVGCircleElement>(".glow-circle")
           .transition()
           .duration(200)
           .attr("r", (d.radius + 6) * 1.2)
           .attr("opacity", 0.4);
 
         // Highlight connected links
-        g.selectAll("line.link")
-          .filter((l: any) => l.source.id === d.id || l.target.id === d.id)
+        g.selectAll<SVGLineElement, NetworkLink>("line.link")
+          .filter((l: NetworkLink) => (l.source as NetworkNode).id === d.id || (l.target as NetworkNode).id === d.id)
           .transition()
           .duration(200)
           .attr("stroke-opacity", 1)
-          .attr("stroke-width", (l: any) => Math.max(3, l.strokeWidth * 1.5))
+          .attr("stroke-width", (l: NetworkLink) => Math.max(3, l.strokeWidth * 1.5))
           .attr("stroke", "rgba(255, 255, 255, 0.9)");
       })
-      .on("mouseout", function(event, d) {
+      .on("mouseout", function(_, d) {
         const node = d3.select(this);
         
-        node.select(".main-circle")
+        node.select<SVGCircleElement>(".main-circle")
           .transition()
           .duration(200)
           .attr("r", d.radius)
           .attr("stroke-width", 2.5)
           .style("filter", "drop-shadow(0px 4px 12px rgba(0,0,0,0.6))");
         
-        node.select(".glow-circle")
+        node.select<SVGCircleElement>(".glow-circle")
           .transition()
           .duration(200)
           .attr("r", d.radius + 6)
           .attr("opacity", 0.2);
 
         // Reset link highlighting
-        g.selectAll("line.link")
+        g.selectAll<SVGLineElement, NetworkLink>("line.link")
           .transition()
           .duration(200)
           .attr("stroke-opacity", 0.7)
-          .attr("stroke-width", (l: any) => Math.max(1.5, l.strokeWidth * 0.9))
-          .attr("stroke", (l: any) => {
+          .attr("stroke-width", (l: NetworkLink) => Math.max(1.5, l.strokeWidth * 0.9))
+          .attr("stroke", (l: NetworkLink) => {
             const intensity = Math.min(1, l.weight / 15);
             return d3.interpolateRgb("rgba(150, 150, 150, 0.3)", "rgba(255, 255, 255, 0.8)")(intensity);
           });
@@ -382,24 +381,24 @@ export const NetworkVisualization: React.FC<NetworkVisualizationProps> = ({
 
     // Enhanced simulation tick function
     simulation.on("tick", () => {
-      g.selectAll("line.link")
-        .attr("x1", (d: any) => d.source.x)
-        .attr("y1", (d: any) => d.source.y)
-        .attr("x2", (d: any) => d.target.x)
-        .attr("y2", (d: any) => d.target.y);
+      g.selectAll<SVGLineElement, NetworkLink>("line.link")
+        .attr("x1", (d: NetworkLink) => (d.source as NetworkNode).x!)
+        .attr("y1", (d: NetworkLink) => (d.source as NetworkNode).y!)
+        .attr("x2", (d: NetworkLink) => (d.target as NetworkNode).x!)
+        .attr("y2", (d: NetworkLink) => (d.target as NetworkNode).y!);
 
-      g.selectAll("g.node")
-        .attr("transform", (d: any) => {
+      g.selectAll<SVGGElement, NetworkNode>("g.node")
+        .attr("transform", (d: NetworkNode) => {
           // Enhanced boundary constraints
           const margin = Math.max(d.radius + 30, (d.name.length * 3) + 20);
-          d.x = Math.max(margin, Math.min(width - margin, d.x));
-          d.y = Math.max(margin, Math.min(height - margin, d.y));
+          d.x = Math.max(margin, Math.min(width - margin, d.x!));
+          d.y = Math.max(margin, Math.min(height - margin, d.y!));
           return `translate(${d.x},${d.y})`;
         });
     });
 
     // Auto-fit after updates with smooth animation
-    autoFitGraph(svg, g, isNewData);
+    autoFitGraph(svg, isNewData);
 
     function dragstarted(event: d3.D3DragEvent<SVGGElement, NetworkNode, NetworkNode>, d: NetworkNode) {
       if (!event.active) simulation.alphaTarget(0.3).restart();
@@ -433,23 +432,23 @@ export const NetworkVisualization: React.FC<NetworkVisualizationProps> = ({
     const svg = d3.select(svgRef.current);
     
     // Reset all styling
-    svg.selectAll('.main-circle')
+    svg.selectAll<SVGCircleElement, unknown>('.main-circle')
       .transition()
       .duration(300)
       .attr('stroke', 'rgba(255, 255, 255, 0.9)')
       .attr('stroke-width', 2.5)
       .style('filter', 'drop-shadow(0px 4px 12px rgba(0,0,0,0.6))');
     
-    svg.selectAll('line.link')
+    svg.selectAll<SVGLineElement, unknown>('line.link')
       .transition()
       .duration(300)
       .attr('stroke-opacity', 0.7);
 
     if (highlightedCharacter) {
       // Highlight selected character with vibrant effects
-      svg.selectAll('g.node')
-        .filter((d: any) => d.name === highlightedCharacter)
-        .select('.main-circle')
+      svg.selectAll<SVGGElement, NetworkNode>('g.node')
+        .filter((d: NetworkNode) => d.name === highlightedCharacter)
+        .select<SVGCircleElement>('.main-circle')
         .transition()
         .duration(300)
         .attr('stroke', '#ff4757')
@@ -457,14 +456,14 @@ export const NetworkVisualization: React.FC<NetworkVisualizationProps> = ({
         .style('filter', 'drop-shadow(0px 8px 24px rgba(255, 71, 87, 0.8)) url(#glow)');
 
       // Highlight connected links
-      svg.selectAll('line.link')
-        .filter((d: any) => 
-          d.source.name === highlightedCharacter || d.target.name === highlightedCharacter)
+      svg.selectAll<SVGLineElement, NetworkLink>('line.link')
+        .filter((d: NetworkLink) => 
+          (d.source as NetworkNode).name === highlightedCharacter || (d.target as NetworkNode).name === highlightedCharacter)
         .transition()
         .duration(300)
         .attr('stroke-opacity', 1)
         .attr('stroke', '#ff4757')
-        .attr('stroke-width', (d: any) => Math.max(3, d.strokeWidth * 2));
+        .attr('stroke-width', (d: NetworkLink) => Math.max(3, d.strokeWidth * 2));
 
       // Highlight connected characters
       const connectedCharacters = links
@@ -476,9 +475,9 @@ export const NetworkVisualization: React.FC<NetworkVisualizationProps> = ({
           (link.target as NetworkNode).name : 
           (link.source as NetworkNode).name);
 
-      svg.selectAll('g.node')
-        .filter((d: any) => connectedCharacters.includes(d.name))
-        .select('.main-circle')
+      svg.selectAll<SVGGElement, NetworkNode>('g.node')
+        .filter((d: NetworkNode) => connectedCharacters.includes(d.name))
+        .select<SVGCircleElement>('.main-circle')
         .transition()
         .duration(300)
         .attr('stroke', '#ffa502')
@@ -490,14 +489,18 @@ export const NetworkVisualization: React.FC<NetworkVisualizationProps> = ({
   return (
     <svg
       ref={svgRef}
-      width={width}
-      height={height}
+      width="100%"
+      height="100%"
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="xMidYMid meet"
       style={{ 
-        background: '#000000', // Black background as requested
+        background: '#000000',
         borderRadius: '12px',
         cursor: 'grab',
-        overflow: 'hidden',
-        border: '1px solid #333'
+        overflow: 'visible',
+        border: '1px solid #333',
+        maxWidth: '100%',
+        maxHeight: '100%'
       }}
     />
   );
